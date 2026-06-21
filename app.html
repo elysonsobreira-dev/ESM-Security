@@ -4,7 +4,25 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ESM Security — Gerador de Orçamentos</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+// Carrega jsPDF de forma robusta com fallback
+(function loadJsPDF() {
+  const urls = [
+    'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+    'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js'
+  ];
+  let idx = 0;
+  function tryLoad() {
+    if (idx >= urls.length) { console.error('jsPDF: todos os CDNs falharam'); return; }
+    const s = document.createElement('script');
+    s.src = urls[idx++];
+    s.onerror = tryLoad;
+    s.onload = () => console.log('jsPDF carregado de:', s.src);
+    document.head.appendChild(s);
+  }
+  tryLoad();
+})();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#1e1e1e;--text:#FFFFF0;--red:#F22B0C;--red2:#c82209;--card:#272727;--card2:#2f2f2f;--border:#3a3a3a;--muted:#888;--green:#27ae60;}
@@ -119,6 +137,8 @@ textarea{resize:vertical;min-height:72px;}
 .btn-wa:hover{background:#1da851;}
 .btn-pdf{flex:1;padding:12px;background:var(--red);color:#fff;border:none;border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-size:.95rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;transition:background .2s;}
 .btn-pdf:hover{background:var(--red2);}
+.btn-wa-empresa{width:100%;padding:10px;background:transparent;color:#25d366;border:1.5px solid #25d366;border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-size:.9rem;font-weight:700;text-transform:uppercase;cursor:pointer;margin-bottom:8px;transition:all .2s;}
+.btn-wa-empresa:hover{background:rgba(37,211,102,.1);}
 .btn-novo{width:100%;padding:11px;background:transparent;color:var(--muted);border:1.5px solid var(--border);border-radius:10px;font-family:'Barlow',sans-serif;font-size:.88rem;cursor:pointer;transition:all .2s;}
 .btn-novo:hover{color:var(--text);border-color:var(--text);}
 
@@ -305,8 +325,24 @@ textarea{resize:vertical;min-height:72px;}
 <br>
 <div class="sec-title">Itens do <span>Orçamento</span></div>
 <div class="sec-sub">Adicione produtos/serviços ou use a IA</div>
-<div class="ai-badge"><div class="ai-dot"></div>Sugestão inteligente disponível</div>
-<button class="btn-add-dash" onclick="sugerirIA()">🤖 Sugerir itens com IA</button>
+<div style="background:#1a1a1a;border:1px solid #3a3a3a;border-radius:12px;padding:14px;margin-bottom:14px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+    <div class="ai-badge" style="margin:0"><div class="ai-dot"></div>IA disponível</div>
+    <button onclick="toggleIAConfig()" style="background:transparent;border:none;color:#888;font-size:.75rem;cursor:pointer;font-family:Barlow,sans-serif;">⚙️ Configurar chave</button>
+  </div>
+  <div id="ia-config-panel" style="display:none;margin-bottom:10px;padding:10px;background:#111;border-radius:8px;border:1px solid #3a3a3a;">
+    <div style="font-size:.72rem;color:#888;margin-bottom:6px;">Cole sua chave de API gratuita:</div>
+    <div style="display:flex;gap:6px;">
+      <input type="password" id="ia-key-input" placeholder="AIza... (Gemini) ou sk-... (OpenAI)" style="flex:1;font-size:.8rem;padding:8px 10px;">
+      <button onclick="salvarChaveIA()" style="background:#F22B0C;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-family:Barlow Condensed,sans-serif;font-weight:700;font-size:.85rem;cursor:pointer;">Salvar</button>
+    </div>
+    <div style="font-size:.68rem;color:#666;margin-top:6px;line-height:1.5;">
+      🔑 Gemini gratuito: <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#F22B0C;">aistudio.google.com/apikey</a>
+    </div>
+    <div id="ia-key-status" style="font-size:.72rem;margin-top:4px;"></div>
+  </div>
+  <button class="btn-add-dash" style="margin:0" onclick="sugerirIA()">🤖 Sugerir itens com IA</button>
+</div>
 <div class="item-hdr"><span>Descrição</span><span>Qtd</span><span>Valor Unit.</span><span></span></div>
 <div id="itemsList"></div>
 <button class="btn-add-dash" onclick="addItem()">+ Adicionar item manualmente</button>
@@ -440,27 +476,77 @@ function renderItems(){
 }
 
 // IA — SUGERIR ITENS
+function toggleIAConfig(){
+  const p=document.getElementById('ia-config-panel');
+  p.style.display=p.style.display==='none'?'block':'none';
+  const key=localStorage.getItem('esm_gemini_key')||'';
+  if(key){
+    const inp=document.getElementById('ia-key-input');
+    if(inp) inp.value=key;
+    const st=document.getElementById('ia-key-status');
+    if(st){st.textContent='✅ Chave salva: '+key.substring(0,8)+'...';st.style.color='#27ae60';}
+  }
+}
+
+function salvarChaveIA(){
+  const key=document.getElementById('ia-key-input').value.trim();
+  if(!key){alert('Cole sua chave de API primeiro.');return;}
+  localStorage.setItem('esm_gemini_key',key);
+  const st=document.getElementById('ia-key-status');
+  if(st){st.textContent='✅ Chave salva com sucesso!';st.style.color='#27ae60';}
+  setTimeout(()=>{
+    document.getElementById('ia-config-panel').style.display='none';
+  },1500);
+}
+
 async function sugerirIA(){
-  const s=selSrvs.join(', ')||'serviços gerais';
-  const a=document.getElementById('ambiente').value;
-  const p=document.getElementById('descProblema').value;
-  showLoad('Analisando e sugerindo itens com <em>IA</em>...');
-  const prompt=`Você é especialista em segurança eletrônica brasileiro. Sugira itens de orçamento:
+  const apiKey = localStorage.getItem('esm_gemini_key') || '';
+  if (!apiKey) {
+    // Abre painel de configuração em vez de prompt
+    document.getElementById('ia-config-panel').style.display='block';
+    document.getElementById('ia-key-input').focus();
+    alert('⚙️ Configure sua chave de API gratuita do Gemini no painel acima.\n\nAcesse: aistudio.google.com/apikey\nCrie uma chave gratuita e cole aqui.');
+    return;
+  }
+  const s = selSrvs.join(', ') || 'serviços gerais de segurança eletrônica';
+  const a = document.getElementById('ambiente').value;
+  const p = document.getElementById('descProblema').value;
+  showLoad('IA analisando e sugerindo itens...');
+  const prompt = `Você é especialista em segurança eletrônica brasileiro da empresa ESM Security em Belém/PA.
+Sugira itens de orçamento para:
 - Serviços: ${s}
 - Ambiente: ${a}
-- Contexto: ${p||'instalação padrão'}
-Responda APENAS JSON puro sem markdown: {"itens":[{"desc":"Nome","qty":1,"val":250}]}
-Máximo 8 itens, valores de mercado em reais, inclua instalação.`;
-  try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
-    const data=await res.json();
-    const txt=data.content[0].text.replace(/```json|```/g,'').trim();
-    const parsed=JSON.parse(txt);
-    items=[];
-    parsed.itens.forEach(i=>items.push({id:Date.now()+Math.random(),desc:i.desc,qty:i.qty,val:i.val}));
+- Contexto: ${p || 'instalação padrão'}
+
+Responda APENAS JSON puro, sem markdown, sem explicação:
+{"itens":[{"desc":"Nome do produto/serviço","qty":1,"val":250}]}
+
+Regras: máximo 8 itens, valores realistas de mercado em reais (BRL), inclua mão de obra/instalação.`;
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.3, maxOutputTokens:1000 } }) }
+    );
+    const data = await res.json();
+    if (data.error) {
+      if (data.error.code === 400 || data.error.code === 403) {
+        localStorage.removeItem('esm_gemini_key');
+        alert('❌ Chave inválida. Será solicitada novamente.');
+      } else {
+        alert('Erro da API: ' + data.error.message);
+      }
+      return;
+    }
+    const txt = data.candidates[0].content.parts[0].text.replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(txt);
+    items = [];
+    parsed.itens.forEach(i => items.push({id:Date.now()+Math.random(), desc:i.desc, qty:i.qty, val:i.val}));
     renderItems();
-  }catch(e){alert('Erro ao sugerir. Adicione manualmente.');}
-  finally{hideLoad();}
+  } catch(e) {
+    alert('Erro ao sugerir itens: ' + e.message + '\nVerifique sua chave Gemini.');
+  } finally { hideLoad(); }
 }
 
 // GERAR ORÇAMENTO
@@ -490,9 +576,17 @@ async function gerarOrc(){
 Cliente: ${cli} (${tipo}), Serviços: ${srvs}, Ambiente: ${amb}, Contexto: ${cliObs||'instalação nova'}
 Responda APENAS JSON puro: {"diagnostico":"...","solucao":"..."}`;
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,messages:[{role:'user',content:prompt}]})});
+    const gemKey = localStorage.getItem('esm_gemini_key') || '';
+    if (!gemKey) throw new Error('Chave Gemini não configurada');
+    const res=await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${gemKey}`,
+      {method:'POST',headers:{'Content-Type':'application/json'},
+       body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.4,maxOutputTokens:500}})
+      }
+    );
     const data=await res.json();
-    const txt=data.content[0].text.replace(/```json|```/g,'').trim();
+    if(data.error) throw new Error(data.error.message);
+    const txt=data.candidates[0].content.parts[0].text.replace(/```json|```/g,'').trim();
     const p=JSON.parse(txt);
     orcData={cli,tel,tipo,end,srvs,amb,prazo,pag,val,obs,diag:p.diagnostico,sol:p.solucao,items:[...items],sub,desl,urg,desc,total,num:orcNum,whats,email,site,cidade,date:new Date().toLocaleDateString('pt-BR')};
   }catch(e){
@@ -518,7 +612,7 @@ function renderDoc(d){
   document.getElementById('orcDoc').innerHTML=`
     <div class="doc-hdr">
       <div class="doc-logo-wrap">
-        <img class="doc-logo-img" src="${LOGO_URI}" alt="ESM Security">
+        <img src="${LOGO_URI}" style="width:40px;height:40px;object-fit:contain;" onerror="this.style.display='none'">
         <div><div class="doc-logo-name">ESM Security</div><div class="doc-logo-sub">Segurança & Tecnologia</div></div>
       </div>
       <div class="doc-meta"><div>ORÇAMENTO Nº</div><strong>${d.num}</strong><div style="margin-top:3px">DATA: ${d.date}</div></div>
@@ -566,14 +660,35 @@ function renderDoc(d){
 // GERAR PDF
 function gerarPDF(){
   if(!orcData){alert('Gere um orçamento primeiro.');return;}
-  const{jsPDF}=window.jspdf;
+  // Aguarda jsPDF carregar se necessário
+  if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
+    const btn = document.querySelector('.btn-pdf');
+    if(btn){ btn.textContent='⏳ Carregando...'; btn.disabled=true; }
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js';
+    s.onload = () => { 
+      if(btn){ btn.textContent='📄 Gerar PDF'; btn.disabled=false; }
+      setTimeout(gerarPDF, 200); 
+    };
+    s.onerror = () => { 
+      if(btn){ btn.textContent='📄 Gerar PDF'; btn.disabled=false; }
+      alert('Erro ao carregar PDF. Verifique sua conexão.');
+    };
+    document.head.appendChild(s);
+    return;
+  }
+  const jsPDF = window.jspdf.jsPDF;
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
   const W=210,M=15;
   let y=0;
 
   // Header
   doc.setFillColor(26,26,46);doc.rect(0,0,W,32,'F');
-  doc.addImage(LOGO_URI,'PNG',M,5,22,22);
+  try { doc.addImage(LOGO_URI,'PNG',M,5,22,22); } catch(imgErr) { 
+    doc.setFillColor(242,43,12); doc.roundedRect(M,7,20,18,2,2,'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+    doc.text('ESM',M+10,18,{align:'center'});
+  }
   doc.setTextColor(255,255,255);doc.setFontSize(14);doc.setFont('helvetica','bold');
   doc.text('ESM Security',M+26,13);
   doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(170,170,170);
@@ -694,13 +809,54 @@ function gerarPDF(){
 function enviarWA(d){
   const od=d||orcData;
   if(!od){alert('Nenhum orçamento disponível.');return;}
-  const num=(d?d.whats:document.getElementById('cfgWhats').value).replace(/[^0-9]/g,'');
+  // Envia para o CLIENTE (telefone do cliente preenchido no passo 1)
+  const clienteTel = od.tel ? od.tel.replace(/[^0-9]/g,'') : '';
+  if(!clienteTel){
+    // Se não tem tel do cliente, abre WA sem número (escolhe contato manualmente)
+    const num='';
+    const url='https://api.whatsapp.com/send?text='+encodeURIComponent(buildWAMsg(od));
+    window.open(url,'_blank');
+    return;
+  }
+  const num = clienteTel;
   const msg=`*ORÇAMENTO ${od.num} — ESM Security*\n\n`+
     `👤 *Cliente:* ${od.cli}\n🔧 *Serviço:* ${od.srvs}\n📍 *Ambiente:* ${od.amb}\n\n*Itens:*\n`+
     od.items.map(i=>`• ${i.desc} (${i.qty}x) — R$ ${fmt((i.qty||1)*(i.val||0))}`).join('\n')+
     `\n\n💰 *TOTAL: R$ ${fmt(od.total)}*\n💳 ${od.pag}\n⏱️ Prazo: ${od.prazo}\n📅 Válido por: ${od.val}\n\n`+
     `_ESM Security — Segurança & Tecnologia — ${od.cidade}_`;
-  window.open('https://wa.me/55'+num+'?text='+encodeURIComponent(msg),'_blank');
+  window.open('https://wa.me/55'+num+'?text='+encodeURIComponent(buildWAMsg(od)),'_blank');
+}
+
+function enviarWAEmpresa(){
+  if(!orcData){alert('Gere um orçamento primeiro.');return;}
+  const meuNum = document.getElementById('cfgWhats').value.replace(/[^0-9]/g,'');
+  const url = meuNum 
+    ? 'https://wa.me/55'+meuNum+'?text='+encodeURIComponent(buildWAMsg(orcData))
+    : 'https://api.whatsapp.com/send?text='+encodeURIComponent(buildWAMsg(orcData));
+  window.open(url,'_blank');
+}
+
+function buildWAMsg(od){
+  return `*ORÇAMENTO ${od.num} — ESM Security*
+
+`+
+    `👤 *Cliente:* ${od.cli}
+🔧 *Serviço:* ${od.srvs}
+📍 *Ambiente:* ${od.amb}
+
+*Itens:*
+`+
+    od.items.map(i=>`• ${i.desc} (${i.qty}x) — R$ ${fmt((i.qty||1)*(i.val||0))}`).join('
+')+
+    `
+
+💰 *TOTAL: R$ ${fmt(od.total)}*
+💳 ${od.pag}
+⏱️ Prazo: ${od.prazo}
+📅 Válido por: ${od.val}
+
+`+
+    `_ESM Security — ${od.cidade} | ${od.whats}_`;
 }
 
 // HISTÓRICO
@@ -811,7 +967,18 @@ function _renderHistList(hist){
       </div>
     </div>`).join('');
 }
-function verOrcDirect(d){ orcData=d; renderDoc(d); showTab(5); }
+function verOrcDirect(d){
+  orcData=d; renderDoc(d);
+  setTimeout(()=>{
+    const logoEl=document.getElementById('doc-logo-container');
+    if(logoEl&&logoEl.children.length===0){
+      const img=document.createElement('img');
+      img.src=LOGO_URI; img.style.cssText='width:40px;height:40px;object-fit:contain;';
+      logoEl.appendChild(img);
+    }
+  },50);
+  showTab(5);
+}
 function waHistDirect(d){ enviarWA(d); }
 
 function fmt(n){return(parseFloat(n)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -976,7 +1143,125 @@ document.addEventListener('click', (e) => {
     if (dd) dd.style.display = 'none';
   }
 });
+
+// ═══ CHAT IA FLUTUANTE ═══════════════════════════════════
+let chatHistory = [];
+
+function toggleChat() {
+  const chat = document.getElementById('ia-chat');
+  chat.classList.toggle('open');
+  if (chat.classList.contains('open')) {
+    document.getElementById('ia-input').focus();
+    verificarChaveGemini();
+  }
+}
+
+function verificarChaveGemini() {
+  const key = localStorage.getItem('esm_gemini_key');
+  document.getElementById('ia-key-info').style.display = key ? 'none' : 'block';
+}
+
+function configurarChaveGemini() {
+  const k = prompt('Cole sua chave da API Gemini:\n(Gratuita em aistudio.google.com → "Get API Key")');
+  if (k && k.trim()) {
+    localStorage.setItem('esm_gemini_key', k.trim());
+    verificarChaveGemini();
+    adicionarMensagem('bot', '✅ Chave configurada! Agora posso usar a IA. Como posso ajudar?');
+  }
+}
+
+function adicionarMensagem(tipo, texto) {
+  const msgs = document.getElementById('ia-msgs');
+  const div = document.createElement('div');
+  div.className = 'ia-msg ' + tipo;
+  div.textContent = texto;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+async function enviarChat() {
+  const input = document.getElementById('ia-input');
+  const txt = input.value.trim();
+  if (!txt) return;
+  const apiKey = localStorage.getItem('esm_gemini_key');
+  if (!apiKey) {
+    configurarChaveGemini();
+    return;
+  }
+  input.value = '';
+  adicionarMensagem('user', txt);
+  const btn = document.getElementById('ia-send-btn');
+  btn.disabled = true;
+  const loadMsg = adicionarMensagem('bot', '⏳ Pensando...');
+  loadMsg.className = 'ia-msg bot loading';
+
+  chatHistory.push({ role:'user', parts:[{ text: txt }] });
+
+  const systemCtx = `Você é um assistente especialista em segurança eletrônica da ESM Security, empresa em Belém/PA que oferece: CFTV, alarmes, controle de acesso, proteção perimetral, automação residencial, recarga de frotas EV, TI, recuperação de dados, cabeamento e manutenção. Responda de forma objetiva e profissional em português. Se perguntarem sobre preços, dê estimativas de mercado de Belém/PA.`;
+
+  const contents = [
+    { role:'user', parts:[{ text: systemCtx }] },
+    { role:'model', parts:[{ text: 'Entendido! Estou pronto para ajudar como assistente da ESM Security.' }] },
+    ...chatHistory
+  ];
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents, generationConfig:{ temperature:0.7, maxOutputTokens:500 } }) }
+    );
+    const data = await res.json();
+    if (data.error) {
+      loadMsg.textContent = '❌ Erro: ' + data.error.message;
+      loadMsg.className = 'ia-msg bot';
+      chatHistory.pop();
+      return;
+    }
+    const reply = data.candidates[0].content.parts[0].text;
+    loadMsg.textContent = reply;
+    loadMsg.className = 'ia-msg bot';
+    chatHistory.push({ role:'model', parts:[{ text: reply }] });
+    if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+  } catch(e) {
+    loadMsg.textContent = '❌ Erro de conexão. Tente novamente.';
+    loadMsg.className = 'ia-msg bot';
+    chatHistory.pop();
+  } finally {
+    btn.disabled = false;
+    document.getElementById('ia-msgs').scrollTop = 9999;
+  }
+}
+// ═══════════════════════════════════════════════════════════
+
 </script>
+
+
+<!-- CHAT IA FLUTUANTE -->
+<button id="ia-fab" onclick="toggleChat()" title="Assistente IA">🤖</button>
+<div id="ia-chat">
+  <div class="ia-chat-hdr">
+    <div class="ia-chat-hdr-left">
+      <div class="ia-chat-hdr-icon">✨</div>
+      <div>
+        <div class="ia-chat-title">Assistente ESM</div>
+        <div class="ia-chat-sub">Gemini AI • Segurança Eletrônica</div>
+      </div>
+    </div>
+    <button class="ia-close" onclick="toggleChat()">✕</button>
+  </div>
+  <div class="ia-msgs" id="ia-msgs">
+    <div class="ia-msg bot">👋 Olá! Sou o assistente da ESM Security. Posso ajudar com dúvidas sobre produtos, preços, serviços ou montar seu orçamento. Como posso ajudar?</div>
+  </div>
+  <div class="ia-key-info" id="ia-key-info" style="display:none;">
+    ⚠️ Configure sua chave Gemini (gratuita): <a onclick="configurarChaveGemini()">clique aqui</a>
+  </div>
+  <div class="ia-input-row">
+    <input class="ia-input" id="ia-input" placeholder="Pergunte algo..." onkeydown="if(event.key==='Enter'&&!event.shiftKey)enviarChat()">
+    <button class="ia-send" id="ia-send-btn" onclick="enviarChat()">➤</button>
+  </div>
+</div>
 
 </body>
 </html>
